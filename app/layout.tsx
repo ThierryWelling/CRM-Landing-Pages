@@ -1,6 +1,7 @@
 import './globals.css'
 import { Inter } from 'next/font/google'
 import { Toaster } from 'react-hot-toast'
+import AutoAuth from './components/AutoAuth'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -12,6 +13,7 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <body className={inter.className}>
+        <AutoAuth />
         {children}
         <Toaster
           position="top-right"

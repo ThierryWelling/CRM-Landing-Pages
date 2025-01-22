@@ -1,42 +1,68 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
+import { User } from '@supabase/supabase-js'
 
 export default function NewLandingPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [user, setUser] = useState<User | null>(null)
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     url: '',
   })
 
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        router.push('/')
+        toast.error('Você precisa estar logado para criar uma landing page')
+      } else {
+        setUser(user)
+      }
+    }
+    checkAuth()
+  }, [])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
 
     try {
+      if (!user) {
+        throw new Error('Usuário não autenticado')
+      }
+
       const { error } = await supabase.from('landing_pages').insert([
         {
           ...formData,
           status: 'draft',
-          user_id: (await supabase.auth.getUser()).data.user?.id,
+          user_id: user.id,
         },
       ])
 
-      if (error) throw error
+      if (error) {
+        console.error('Erro Supabase:', error)
+        throw new Error(error.message)
+      }
 
       toast.success('Landing page criada com sucesso!')
       router.push('/')
-    } catch (error) {
-      toast.error('Erro ao criar landing page')
+    } catch (error: any) {
+      toast.error(error.message || 'Erro ao criar landing page')
       console.error('Error:', error)
     } finally {
       setLoading(false)
     }
+  }
+
+  if (!user) {
+    return <div className="container mx-auto px-4 py-8">Carregando...</div>
   }
 
   return (
