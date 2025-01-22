@@ -12,6 +12,7 @@ export interface UserSettings {
     text: string
   }
   theme_id?: string
+  user_id?: string
 }
 
 export interface UseUserSettingsReturn {
@@ -143,12 +144,13 @@ export function useUserSettings(): UseUserSettingsReturn {
 
   const deleteSettings = async () => {
     try {
-      if (!settings) throw new Error('Nenhuma configuração encontrada')
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Usuário não autenticado')
 
       const { error } = await supabase
         .from('user_settings')
         .delete()
-        .eq('user_id', settings.user_id)
+        .eq('user_id', user.id)
 
       if (error) throw error
 
