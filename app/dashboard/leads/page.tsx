@@ -7,10 +7,18 @@ import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import DatePicker from 'react-datepicker'
 import "react-datepicker/dist/react-datepicker.css"
+import { toast } from 'react-hot-toast'
 
 type Lead = {
   id: string
   landing_page_id: string
+  form_fields: Array<{
+    id: string
+    type: string
+    label: string
+    placeholder: string
+    required: boolean
+  }>
   form_data: Record<string, any>
   status: string
   source: string
@@ -21,6 +29,15 @@ type Lead = {
   landing_page: {
     title: string
   }
+}
+
+type GroupedFields = {
+  text: string[]
+  email: string[]
+  tel: string[]
+  number: string[]
+  select: string[]
+  textarea: string[]
 }
 
 export default function Leads() {
@@ -34,6 +51,14 @@ export default function Leads() {
     search: '',
     status: ''
   })
+  const [groupedFields, setGroupedFields] = useState<GroupedFields>({
+    text: [],
+    email: [],
+    tel: [],
+    number: [],
+    select: [],
+    textarea: []
+  })
 
   useEffect(() => {
     fetchData()
@@ -41,8 +66,28 @@ export default function Leads() {
   }, [])
 
   useEffect(() => {
-    fetchData()
-  }, [filters])
+    if (leads.length > 0) {
+      // Agrupar campos por tipo
+      const grouped: GroupedFields = {
+        text: [],
+        email: [],
+        tel: [],
+        number: [],
+        select: [],
+        textarea: []
+      }
+
+      leads.forEach(lead => {
+        lead.form_fields.forEach(field => {
+          if (!grouped[field.type as keyof GroupedFields].includes(field.label)) {
+            grouped[field.type as keyof GroupedFields].push(field.label)
+          }
+        })
+      })
+
+      setGroupedFields(grouped)
+    }
+  }, [leads])
 
   const fetchData = async () => {
     let query = supabase
@@ -92,19 +137,43 @@ export default function Leads() {
   }
 
   const exportToCSV = () => {
-    const headers = ['Data', 'Landing Page', 'Nome', 'Email', 'Telefone', 'Origem', 'Campanha']
+    if (leads.length === 0) {
+      toast.error('Não há leads para exportar')
+      return
+    }
+
+    // Criar cabeçalhos agrupados por tipo
+    const headers = [
+      'Data',
+      'Landing Page',
+      ...groupedFields.text.map(label => `${label} (Texto)`),
+      ...groupedFields.email.map(label => `${label} (Email)`),
+      ...groupedFields.tel.map(label => `${label} (Telefone)`),
+      ...groupedFields.number.map(label => `${label} (Número)`),
+      ...groupedFields.select.map(label => `${label} (Seleção)`),
+      ...groupedFields.textarea.map(label => `${label} (Área de Texto)`),
+      'Origem',
+      'Campanha',
+      'Status'
+    ]
+
+    // Criar linhas de dados
     const csvData = leads.map(lead => [
       format(new Date(lead.created_at), 'dd/MM/yyyy HH:mm'),
       lead.landing_page?.title,
-      lead.form_data.name,
-      lead.form_data.email,
-      lead.form_data.phone,
-      lead.source,
-      lead.utm_campaign
+      ...groupedFields.text.map(label => lead.form_data[label] || ''),
+      ...groupedFields.email.map(label => lead.form_data[label] || ''),
+      ...groupedFields.tel.map(label => lead.form_data[label] || ''),
+      ...groupedFields.number.map(label => lead.form_data[label] || ''),
+      ...groupedFields.select.map(label => lead.form_data[label] || ''),
+      ...groupedFields.textarea.map(label => lead.form_data[label] || ''),
+      lead.source || '',
+      lead.utm_campaign || '',
+      lead.status
     ])
 
     const csvContent = [headers, ...csvData]
-      .map(row => row.join(','))
+      .map(row => row.map(cell => `"${cell}"`).join(','))
       .join('\n')
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
@@ -235,9 +304,49 @@ export default function Leads() {
                   </div>
                 </th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">Landing Page</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">Nome</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">Email</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">Telefone</th>
+                
+                {/* Campos de texto */}
+                {groupedFields.text.map(label => (
+                  <th key={`text-${label}`} className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">
+                    {label} (Texto)
+                  </th>
+                ))}
+
+                {/* Campos de email */}
+                {groupedFields.email.map(label => (
+                  <th key={`email-${label}`} className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">
+                    {label} (Email)
+                  </th>
+                ))}
+
+                {/* Campos de telefone */}
+                {groupedFields.tel.map(label => (
+                  <th key={`tel-${label}`} className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">
+                    {label} (Telefone)
+                  </th>
+                ))}
+
+                {/* Campos numéricos */}
+                {groupedFields.number.map(label => (
+                  <th key={`number-${label}`} className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">
+                    {label} (Número)
+                  </th>
+                ))}
+
+                {/* Campos de seleção */}
+                {groupedFields.select.map(label => (
+                  <th key={`select-${label}`} className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">
+                    {label} (Seleção)
+                  </th>
+                ))}
+
+                {/* Campos de área de texto */}
+                {groupedFields.textarea.map(label => (
+                  <th key={`textarea-${label}`} className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">
+                    {label} (Área de Texto)
+                  </th>
+                ))}
+
                 <th className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">Origem</th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">Status</th>
               </tr>
@@ -254,15 +363,49 @@ export default function Leads() {
                   <td className="py-3 px-4 text-sm text-gray-900 dark:text-white">
                     {lead.landing_page?.title}
                   </td>
-                  <td className="py-3 px-4 text-sm text-gray-900 dark:text-white">
-                    {lead.form_data.name}
-                  </td>
-                  <td className="py-3 px-4 text-sm text-gray-900 dark:text-white">
-                    {lead.form_data.email}
-                  </td>
-                  <td className="py-3 px-4 text-sm text-gray-900 dark:text-white">
-                    {lead.form_data.phone}
-                  </td>
+
+                  {/* Campos de texto */}
+                  {groupedFields.text.map(label => (
+                    <td key={`text-${label}`} className="py-3 px-4 text-sm text-gray-900 dark:text-white">
+                      {lead.form_data[label]}
+                    </td>
+                  ))}
+
+                  {/* Campos de email */}
+                  {groupedFields.email.map(label => (
+                    <td key={`email-${label}`} className="py-3 px-4 text-sm text-gray-900 dark:text-white">
+                      {lead.form_data[label]}
+                    </td>
+                  ))}
+
+                  {/* Campos de telefone */}
+                  {groupedFields.tel.map(label => (
+                    <td key={`tel-${label}`} className="py-3 px-4 text-sm text-gray-900 dark:text-white">
+                      {lead.form_data[label]}
+                    </td>
+                  ))}
+
+                  {/* Campos numéricos */}
+                  {groupedFields.number.map(label => (
+                    <td key={`number-${label}`} className="py-3 px-4 text-sm text-gray-900 dark:text-white">
+                      {lead.form_data[label]}
+                    </td>
+                  ))}
+
+                  {/* Campos de seleção */}
+                  {groupedFields.select.map(label => (
+                    <td key={`select-${label}`} className="py-3 px-4 text-sm text-gray-900 dark:text-white">
+                      {lead.form_data[label]}
+                    </td>
+                  ))}
+
+                  {/* Campos de área de texto */}
+                  {groupedFields.textarea.map(label => (
+                    <td key={`textarea-${label}`} className="py-3 px-4 text-sm text-gray-900 dark:text-white">
+                      {lead.form_data[label]}
+                    </td>
+                  ))}
+
                   <td className="py-3 px-4 text-sm text-gray-900 dark:text-white">
                     {lead.source || '-'}
                     {lead.utm_campaign && ` / ${lead.utm_campaign}`}

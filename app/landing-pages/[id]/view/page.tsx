@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase'
 import Image from 'next/image'
 import toast from 'react-hot-toast'
 import { usePathname } from 'next/navigation'
+import { LandingPage } from '@/types/landingpage'
 
 interface FormField {
   id: string
@@ -13,26 +14,6 @@ interface FormField {
   placeholder: string
   required: boolean
   options?: string[]
-}
-
-interface LandingPage {
-  id: string
-  title: string
-  description: string
-  logo_url: string
-  background_url: string
-  form_fields: FormField[]
-  custom_html: string
-  button_text: string
-  button_color: string
-  use_custom_html: boolean
-  status: 'draft' | 'published'
-  user_id: string
-  created_at: string
-  updated_at: string
-  visits?: number
-  conversions?: number
-  conversion_rate?: number
 }
 
 export default function LandingPageView({ params }: { params: Promise<{ id: string }> }) {
@@ -81,15 +62,67 @@ export default function LandingPageView({ params }: { params: Promise<{ id: stri
     }
   }
 
+  const validateAndFormatFormData = (formFields: any[], formData: any) => {
+    const validatedData: Record<string, any> = {}
+    
+    formFields.forEach(field => {
+      const value = formData[field.id]
+      
+      switch (field.type) {
+        case 'text':
+        case 'textarea':
+          validatedData[field.label] = String(value || '')
+          break
+        case 'email':
+          if (value && !value.includes('@')) {
+            throw new Error(`O campo ${field.label} deve ser um email válido`)
+          }
+          validatedData[field.label] = String(value || '')
+          break
+        case 'tel':
+          // Remove caracteres não numéricos
+          const phone = String(value || '').replace(/\D/g, '')
+          if (phone && phone.length < 10) {
+            throw new Error(`O campo ${field.label} deve ser um telefone válido`)
+          }
+          validatedData[field.label] = phone
+          break
+        case 'number':
+          const num = Number(value)
+          if (value && isNaN(num)) {
+            throw new Error(`O campo ${field.label} deve ser um número válido`)
+          }
+          validatedData[field.label] = num || null
+          break
+        case 'select':
+          if (value && !field.options?.includes(value)) {
+            throw new Error(`O valor selecionado para ${field.label} não é válido`)
+          }
+          validatedData[field.label] = String(value || '')
+          break
+        default:
+          validatedData[field.label] = String(value || '')
+      }
+    })
+    
+    return validatedData
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!page || page.status !== 'published' || !isPublicView) return
 
     try {
-      const { error: submissionError } = await supabase.from('form_submissions').insert([{
+      // Validar e formatar os dados antes de salvar
+      const validatedFormData = validateAndFormatFormData(page.form_fields, formData)
+
+      const { error: submissionError } = await supabase.from('leads').insert([{
         landing_page_id: page.id,
-        form_data: formData,
-        submitted_at: new Date().toISOString()
+        form_fields: page.form_fields,
+        form_data: validatedFormData,
+        status: 'new',
+        source: 'direct', // Você pode ajustar isso baseado na origem
+        created_at: new Date().toISOString()
       }])
 
       if (submissionError) throw submissionError
@@ -115,9 +148,9 @@ export default function LandingPageView({ params }: { params: Promise<{ id: stri
         conversions: newConversions,
         conversion_rate: parseFloat(newConversionRate)
       })
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error:', error)
-      toast.error('Erro ao enviar formulário')
+      toast.error(error.message || 'Erro ao enviar formulário')
     }
   }
 
