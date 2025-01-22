@@ -42,8 +42,8 @@ export default function AuthCallbackPage() {
             // Ativar login automático
             localStorage.setItem('autoLogin', 'true')
             
-            // Redirecionar para o dashboard
-            window.location.href = 'https://crm-landing-pages.vercel.app/dashboard'
+            // Redirecionar para o dashboard usando replace
+            router.replace('/dashboard')
             return
           }
         }
@@ -54,13 +54,15 @@ export default function AuthCallbackPage() {
         if (error) throw error
         
         if (session) {
-          window.location.href = 'https://crm-landing-pages.vercel.app/dashboard'
+          // Usar replace para evitar histórico de navegação
+          router.replace('/dashboard')
         } else {
-          window.location.href = 'https://crm-landing-pages.vercel.app'
+          // Se não houver sessão, redirecionar para a página inicial
+          router.replace('/')
         }
       } catch (error) {
         console.error('Erro no callback:', error)
-        window.location.href = 'https://crm-landing-pages.vercel.app'
+        router.replace('/')
       }
     }
 
