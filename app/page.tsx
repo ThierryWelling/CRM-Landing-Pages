@@ -132,7 +132,7 @@ export default function LoginPage() {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`
+          redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`
         }
       })
 
@@ -147,7 +147,6 @@ export default function LoginPage() {
       }
 
       if (data) {
-        // Ativar login automático para login com Google também
         localStorage.setItem('autoLogin', 'true')
         toast.success('Redirecionando para autenticação do Google...')
       }

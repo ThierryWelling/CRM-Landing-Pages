@@ -3,72 +3,56 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import toast from 'react-hot-toast'
 
-export default function AuthCallback() {
+export default function AuthCallbackPage() {
   const router = useRouter()
 
   useEffect(() => {
-    const handleAuthCallback = async () => {
-      const { data: { user }, error } = await supabase.auth.getUser()
-
-      if (error) {
-        console.error('Erro na autenticação:', error)
-        toast.error('Erro na autenticação')
-        router.push('/')
-        return
-      }
-
-      if (user) {
-        // Verificar se o usuário já tem um perfil
-        const { data: profile } = await supabase
-          .from('user_profiles')
-          .select('*')
-          .eq('user_id', user.id)
-          .single()
-
-        if (!profile) {
-          // Verificar limite de usuários
-          const { count } = await supabase
+    const handleCallback = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession()
+        
+        if (error) throw error
+        
+        if (session) {
+          // Verificar/criar perfil do usuário
+          const { data: profile, error: profileError } = await supabase
             .from('user_profiles')
-            .select('*', { count: 'exact' })
+            .select('*')
+            .eq('user_id', session.user.id)
+            .single()
 
-          if (count && count >= 5) {
-            await supabase.auth.signOut()
-            toast.error('Limite de usuários atingido. Entre em contato com o administrador.')
-            router.push('/')
-            return
+          if (!profile && !profileError) {
+            // Criar perfil se não existir
+            await supabase
+              .from('user_profiles')
+              .insert([{
+                user_id: session.user.id,
+                email: session.user.email,
+                created_at: new Date().toISOString()
+              }])
           }
 
-          // Criar perfil do usuário
-          const { error: profileError } = await supabase
-            .from('user_profiles')
-            .insert([{ user_id: user.id }])
-
-          if (profileError) {
-            console.error('Erro ao criar perfil:', profileError)
-            toast.error('Erro ao criar perfil de usuário')
-            router.push('/')
-            return
-          }
+          // Ativar login automático
+          localStorage.setItem('autoLogin', 'true')
+          
+          // Redirecionar para o dashboard
+          router.replace('/dashboard')
+        } else {
+          router.replace('/login')
         }
-
-        toast.success('Login realizado com sucesso!')
-        router.push('/dashboard/landing-pages')
-      } else {
-        router.push('/')
+      } catch (error) {
+        console.error('Erro no callback:', error)
+        router.replace('/login')
       }
     }
 
-    handleAuthCallback()
+    handleCallback()
   }, [router])
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-blue-50 to-white">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-        <p className="mt-4 text-gray-600">Autenticando...</p>
-      </div>
+      <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
     </div>
   )
 } 
