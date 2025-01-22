@@ -3,75 +3,72 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import toast from 'react-hot-toast'
 
-export default function AuthCallbackPage() {
+export default function AuthCallback() {
   const router = useRouter()
 
   useEffect(() => {
-    const handleCallback = async () => {
-      try {
-        // Primeiro tenta pegar o código da URL
-        const hashParams = new URLSearchParams(window.location.search)
-        const code = hashParams.get('code')
+    const handleAuthCallback = async () => {
+      const { data: { user }, error } = await supabase.auth.getUser()
 
-        if (code) {
-          // Se tiver código, troca por uma sessão
-          const { data, error } = await supabase.auth.exchangeCodeForSession(code)
-          
-          if (error) throw error
-          
-          if (data.session) {
-            // Verificar/criar perfil do usuário
-            const { data: profile, error: profileError } = await supabase
-              .from('user_profiles')
-              .select('*')
-              .eq('user_id', data.session.user.id)
-              .single()
+      if (error) {
+        console.error('Erro na autenticação:', error)
+        toast.error('Erro na autenticação')
+        router.push('/')
+        return
+      }
 
-            if (!profile && !profileError) {
-              // Criar perfil se não existir
-              await supabase
-                .from('user_profiles')
-                .insert([{
-                  user_id: data.session.user.id,
-                  email: data.session.user.email,
-                  created_at: new Date().toISOString()
-                }])
-            }
+      if (user) {
+        // Verificar se o usuário já tem um perfil
+        const { data: profile } = await supabase
+          .from('user_profiles')
+          .select('*')
+          .eq('user_id', user.id)
+          .single()
 
-            // Ativar login automático
-            localStorage.setItem('autoLogin', 'true')
-            
-            // Redirecionar para o dashboard usando replace
-            router.replace('/dashboard')
+        if (!profile) {
+          // Verificar limite de usuários
+          const { count } = await supabase
+            .from('user_profiles')
+            .select('*', { count: 'exact' })
+
+          if (count && count >= 5) {
+            await supabase.auth.signOut()
+            toast.error('Limite de usuários atingido. Entre em contato com o administrador.')
+            router.push('/')
+            return
+          }
+
+          // Criar perfil do usuário
+          const { error: profileError } = await supabase
+            .from('user_profiles')
+            .insert([{ user_id: user.id }])
+
+          if (profileError) {
+            console.error('Erro ao criar perfil:', profileError)
+            toast.error('Erro ao criar perfil de usuário')
+            router.push('/')
             return
           }
         }
 
-        // Se não tiver código ou falhar, tenta pegar a sessão atual
-        const { data: { session }, error } = await supabase.auth.getSession()
-        
-        if (error) throw error
-        
-        if (session) {
-          // Usar replace para evitar histórico de navegação
-          router.replace('/dashboard')
-        } else {
-          // Se não houver sessão, redirecionar para a página inicial
-          router.replace('/')
-        }
-      } catch (error) {
-        console.error('Erro no callback:', error)
-        router.replace('/')
+        toast.success('Login realizado com sucesso!')
+        router.push('/dashboard/landing-pages')
+      } else {
+        router.push('/')
       }
     }
 
-    handleCallback()
+    handleAuthCallback()
   }, [router])
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-blue-50 to-white">
-      <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+        <p className="mt-4 text-gray-600">Autenticando...</p>
+      </div>
     </div>
   )
 } 

@@ -36,17 +36,6 @@ interface UserProfile {
   created_at: string
 }
 
-interface UserSettingsForm {
-  theme: 'light' | 'dark' | 'system'
-  language: 'pt-BR' | 'en-US' | 'es'
-  colorScheme: {
-    primary: string
-    secondary: string
-    background: string
-    text: string
-  }
-}
-
 const languages = [
   { value: 'pt-BR', label: 'Português (Brasil)', icon: '🇧🇷' },
   { value: 'en-US', label: 'English (US)', icon: '🇺🇸' },
@@ -66,8 +55,8 @@ export default function SettingsPage() {
   const { settings, updateSettings, loading: settingsLoading, applyTheme } = useUserSettings()
   const [predefinedThemes, setPredefinedThemes] = useState<Theme[]>([])
   const [selectedThemeId, setSelectedThemeId] = useState<string | null>(null)
-  const [userSettings, setUserSettings] = useState<UserSettingsForm>({
-    theme: 'system',
+  const [userSettings, setUserSettings] = useState({
+    theme: 'light',
     language: 'pt-BR',
     colorScheme: {
       primary: '#3B82F6',
@@ -86,8 +75,8 @@ export default function SettingsPage() {
   useEffect(() => {
     if (settings) {
       setUserSettings({
-        theme: settings.theme,
-        language: settings.language,
+        theme: settings.theme as 'light' | 'dark' | 'system',
+        language: settings.language as 'pt-BR' | 'en-US' | 'es',
         colorScheme: settings.color_scheme
       })
       setSelectedThemeId(settings.theme_id || null)
@@ -170,20 +159,43 @@ export default function SettingsPage() {
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
+  const handleUpdateSettings = async () => {
     try {
-      await updateSettings({
-        theme: userSettings.theme,
-        language: userSettings.language,
-        color_scheme: userSettings.colorScheme
-      })
-      
-      toast.success('Configurações atualizadas com sucesso!')
+      // Buscar o tema selecionado se houver theme_id
+      let selectedTheme = null;
+      if (selectedThemeId) {
+        const { data: theme } = await supabase
+          .from('themes')
+          .select('*')
+          .eq('id', selectedThemeId)
+          .single();
+        selectedTheme = theme;
+      }
+
+      // Preparar as configurações para atualização
+      const updatedSettings = {
+        theme: (selectedTheme ? (selectedTheme.is_dark ? 'dark' : 'light') : userSettings.theme) as 'light' | 'dark' | 'system',
+        language: userSettings.language as 'pt-BR' | 'en-US' | 'es',
+        color_scheme: selectedTheme ? selectedTheme.color_scheme : userSettings.colorScheme,
+        theme_id: selectedThemeId || undefined
+      };
+
+      // Atualizar as configurações
+      await updateSettings(updatedSettings);
+
+      // Aplicar o tema imediatamente
+      if (settings) {
+        const newSettings = {
+          ...settings,
+          ...updatedSettings
+        };
+        applyTheme(newSettings);
+      }
+
+      toast.success('Preferências salvas com sucesso!');
     } catch (error) {
-      console.error('Erro ao atualizar configurações:', error)
-      toast.error('Erro ao atualizar configurações')
+      console.error('Erro ao salvar preferências:', error);
+      toast.error('Erro ao salvar preferências');
     }
   }
 
@@ -361,7 +373,7 @@ export default function SettingsPage() {
           {/* Botão de Salvar */}
           <div className="flex justify-start">
             <button
-              type="submit"
+              onClick={handleUpdateSettings}
               className="w-full sm:w-auto px-8 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors
                 flex items-center justify-center gap-2 font-medium"
             >

@@ -1,52 +1,18 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 
 export default function LoginPage() {
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
     email: '',
     password: ''
   })
   const router = useRouter()
-
-  useEffect(() => {
-    checkAutoLogin()
-  }, [])
-
-  const checkAutoLogin = async () => {
-    try {
-      // Verificar se existe uma sessão ativa
-      const { data: { session }, error } = await supabase.auth.getSession()
-      
-      if (error) {
-        console.error('Erro ao verificar sessão:', error)
-        setLoading(false)
-        return
-      }
-
-      // Verificar se o login automático está ativado
-      const autoLoginEnabled = localStorage.getItem('autoLogin') === 'true'
-      
-      if (session && autoLoginEnabled) {
-        // Se houver sessão e login automático ativado, redirecionar para o dashboard
-        router.replace('/dashboard')
-      } else if (session) {
-        // Se houver sessão mas login automático desativado, fazer logout
-        await supabase.auth.signOut()
-        setLoading(false)
-      } else {
-        setLoading(false)
-      }
-    } catch (error) {
-      console.error('Erro ao verificar sessão:', error)
-      setLoading(false)
-    }
-  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -66,63 +32,47 @@ export default function LoginPage() {
         } else {
           toast.error('Erro ao fazer login. Tente novamente.')
         }
-        setLoading(false)
         return
       }
 
       if (user) {
-        // Ativar login automático antes de buscar o perfil
-        localStorage.setItem('autoLogin', 'true')
-
-        const { data: profile, error: profileError } = await supabase
+        const { data: profile } = await supabase
           .from('user_profiles')
           .select('*')
           .eq('user_id', user.id)
           .single()
 
-        if (profileError || !profile) {
+        if (!profile) {
           // Verificar limite de usuários
-          const { count, error: countError } = await supabase
+          const { count } = await supabase
             .from('user_profiles')
             .select('*', { count: 'exact' })
 
-          if (countError) {
-            console.error('Erro ao verificar limite de usuários:', countError)
-            toast.error('Erro ao verificar limite de usuários')
-            setLoading(false)
-            return
-          }
-
           if (count && count >= 5) {
             await supabase.auth.signOut()
-            localStorage.setItem('autoLogin', 'false')
             toast.error('Limite de usuários atingido. Entre em contato com o administrador.')
-            setLoading(false)
             return
           }
 
           // Criar perfil do usuário
-          const { error: createProfileError } = await supabase
+          const { error: profileError } = await supabase
             .from('user_profiles')
-            .insert([{ 
-              user_id: user.id,
-              created_at: new Date().toISOString()
-            }])
+            .insert([{ user_id: user.id }])
 
-          if (createProfileError) {
-            console.error('Erro ao criar perfil:', createProfileError)
+          if (profileError) {
+            console.error('Erro ao criar perfil:', profileError)
             toast.error('Erro ao criar perfil de usuário')
-            setLoading(false)
             return
           }
         }
-        
+
         toast.success('Login realizado com sucesso!')
-        router.replace('/dashboard')
+        router.push('/dashboard')
       }
     } catch (error) {
       console.error('Erro:', error)
       toast.error('Erro ao fazer login')
+    } finally {
       setLoading(false)
     }
   }
@@ -132,12 +82,7 @@ export default function LoginPage() {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-            hd: 'gmail.com'
-          }
+          redirectTo: `${window.location.origin}/auth/callback`
         }
       })
 
@@ -152,21 +97,12 @@ export default function LoginPage() {
       }
 
       if (data) {
-        localStorage.setItem('autoLogin', 'true')
         toast.success('Redirecionando para autenticação do Google...')
       }
     } catch (error) {
       console.error('Erro ao fazer login com Google:', error)
       toast.error('Erro ao conectar com Google. Tente novamente.')
     }
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-blue-50 to-white">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-      </div>
-    )
   }
 
   return (
@@ -211,7 +147,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
               {loading ? 'Entrando...' : 'Entrar'}
             </button>
@@ -231,8 +167,7 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={handleGoogleLogin}
-                disabled={loading}
-                className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
               >
                 <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
                   <path

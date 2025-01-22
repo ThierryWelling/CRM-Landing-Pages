@@ -9,6 +9,7 @@ import { Sidebar, SidebarBody, SidebarLink } from '@/components/ui/sidebar'
 import {
   LayoutDashboard,
   FileText,
+  BarChart3,
   Settings,
   LogOut,
   User2,
@@ -24,56 +25,31 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [userProfile, setUserProfile] = useState<any>(null)
   const { settings, loading: settingsLoading } = useUserSettings()
   const [open, setOpen] = useState(false)
-  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     checkUser()
   }, [])
 
   const checkUser = async () => {
-    try {
-      const { data: { user }, error } = await supabase.auth.getUser()
-      
-      if (error || !user) {
-        console.error('Erro ao verificar usuário:', error)
-        router.replace('/login')
-        return
-      }
-
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      router.push('/')
+    } else {
       setUser(user)
-
       // Buscar dados do perfil do usuário
-      const { data: profile, error: profileError } = await supabase
+      const { data: profile } = await supabase
         .from('user_profiles')
         .select('*')
         .eq('user_id', user.id)
         .single()
       
-      if (profileError) {
-        console.error('Erro ao buscar perfil:', profileError)
-      } else {
-        setUserProfile(profile)
-      }
-
-      setLoading(false)
-    } catch (error) {
-      console.error('Erro ao verificar usuário:', error)
-      router.replace('/login')
+      setUserProfile(profile)
     }
   }
 
   const handleSignOut = async () => {
-    try {
-      setLoading(true)
-      // Desativar login automático
-      localStorage.setItem('autoLogin', 'false')
-      // Fazer logout
-      const { error } = await supabase.auth.signOut()
-      if (error) throw error
-      router.replace('/login')
-    } catch (error) {
-      console.error('Erro ao fazer logout:', error)
-    }
+    await supabase.auth.signOut()
+    router.push('/login')
   }
 
   const links = [
@@ -99,16 +75,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   ]
 
-  if (loading || settingsLoading) {
+  if (settingsLoading) {
     return (
       <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900 dark:border-white"></div>
       </div>
     )
-  }
-
-  if (!user) {
-    return null
   }
 
   return (
