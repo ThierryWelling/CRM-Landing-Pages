@@ -18,14 +18,35 @@ export default function NewLandingPage() {
 
   useEffect(() => {
     const checkAuth = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        router.push('/')
-        toast.error('Você precisa estar logado para criar uma landing page')
-      } else {
+      try {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+        
+        if (sessionError) throw sessionError
+        
+        if (!session) {
+          router.push('/')
+          toast.error('Você precisa estar logado para criar uma landing page')
+          return
+        }
+
+        const { data: { user }, error: userError } = await supabase.auth.getUser()
+        
+        if (userError) throw userError
+        
+        if (!user) {
+          router.push('/')
+          toast.error('Usuário não encontrado')
+          return
+        }
+
         setUser(user)
+      } catch (error: any) {
+        console.error('Erro ao verificar autenticação:', error)
+        toast.error('Erro ao verificar autenticação')
+        router.push('/')
       }
     }
+
     checkAuth()
   }, [])
 
@@ -38,17 +59,30 @@ export default function NewLandingPage() {
         throw new Error('Usuário não autenticado')
       }
 
-      const { error } = await supabase.from('landing_pages').insert([
-        {
-          ...formData,
-          status: 'draft',
-          user_id: user.id,
-        },
-      ])
+      // Validar dados do formulário
+      if (!formData.title.trim()) {
+        throw new Error('O título é obrigatório')
+      }
 
-      if (error) {
-        console.error('Erro Supabase:', error)
-        throw new Error(error.message)
+      if (!formData.url.trim()) {
+        throw new Error('A URL é obrigatória')
+      }
+
+      // Tentar criar a landing page
+      const { error: insertError } = await supabase
+        .from('landing_pages')
+        .insert([
+          {
+            ...formData,
+            status: 'draft',
+            user_id: user.id,
+          },
+        ])
+        .select()
+
+      if (insertError) {
+        console.error('Erro Supabase:', insertError)
+        throw new Error(insertError.message)
       }
 
       toast.success('Landing page criada com sucesso!')
@@ -94,7 +128,6 @@ export default function NewLandingPage() {
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             rows={4}
-            required
           />
         </div>
 
