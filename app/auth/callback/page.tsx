@@ -10,40 +10,57 @@ export default function AuthCallbackPage() {
   useEffect(() => {
     const handleCallback = async () => {
       try {
+        // Primeiro tenta pegar o código da URL
+        const hashParams = new URLSearchParams(window.location.search)
+        const code = hashParams.get('code')
+
+        if (code) {
+          // Se tiver código, troca por uma sessão
+          const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+          
+          if (error) throw error
+          
+          if (data.session) {
+            // Verificar/criar perfil do usuário
+            const { data: profile, error: profileError } = await supabase
+              .from('user_profiles')
+              .select('*')
+              .eq('user_id', data.session.user.id)
+              .single()
+
+            if (!profile && !profileError) {
+              // Criar perfil se não existir
+              await supabase
+                .from('user_profiles')
+                .insert([{
+                  user_id: data.session.user.id,
+                  email: data.session.user.email,
+                  created_at: new Date().toISOString()
+                }])
+            }
+
+            // Ativar login automático
+            localStorage.setItem('autoLogin', 'true')
+            
+            // Redirecionar para o dashboard
+            window.location.href = 'https://crm-landing-pages.vercel.app/dashboard'
+            return
+          }
+        }
+
+        // Se não tiver código ou falhar, tenta pegar a sessão atual
         const { data: { session }, error } = await supabase.auth.getSession()
         
         if (error) throw error
         
         if (session) {
-          // Verificar/criar perfil do usuário
-          const { data: profile, error: profileError } = await supabase
-            .from('user_profiles')
-            .select('*')
-            .eq('user_id', session.user.id)
-            .single()
-
-          if (!profile && !profileError) {
-            // Criar perfil se não existir
-            await supabase
-              .from('user_profiles')
-              .insert([{
-                user_id: session.user.id,
-                email: session.user.email,
-                created_at: new Date().toISOString()
-              }])
-          }
-
-          // Ativar login automático
-          localStorage.setItem('autoLogin', 'true')
-          
-          // Redirecionar para o dashboard
-          router.replace('/dashboard')
+          window.location.href = 'https://crm-landing-pages.vercel.app/dashboard'
         } else {
-          router.replace('/login')
+          window.location.href = 'https://crm-landing-pages.vercel.app'
         }
       } catch (error) {
         console.error('Erro no callback:', error)
-        router.replace('/login')
+        window.location.href = 'https://crm-landing-pages.vercel.app'
       }
     }
 
