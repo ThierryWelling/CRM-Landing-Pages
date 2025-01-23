@@ -130,7 +130,7 @@ export default function NewLandingPage() {
       if (error) throw error
 
       toast.success('Landing page criada com sucesso!')
-      router.push(`/dashboard/landing-pages/${data.id}/edit`)
+      router.push('/dashboard/landing-pages')
     } catch (error: any) {
       console.error('Error:', error)
       toast.error(error.message || 'Erro ao criar landing page')

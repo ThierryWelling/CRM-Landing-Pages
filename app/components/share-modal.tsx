@@ -11,12 +11,6 @@ interface ShareModalProps {
 
 export default function ShareModal({ isOpen, onClose, url }: ShareModalProps) {
   const [copied, setCopied] = useState(false)
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-    return () => setMounted(false)
-  }, [])
 
   useEffect(() => {
     if (copied) {
@@ -34,7 +28,7 @@ export default function ShareModal({ isOpen, onClose, url }: ShareModalProps) {
     }
   }
 
-  if (!mounted || !isOpen) return null
+  if (!isOpen) return null
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
