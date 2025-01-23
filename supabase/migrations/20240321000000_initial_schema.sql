@@ -16,21 +16,21 @@ CREATE TABLE landing_pages (
 -- Create RLS policies
 ALTER TABLE landing_pages ENABLE ROW LEVEL SECURITY;
 
--- Permitir que todos os usuários autenticados possam ver todas as landing pages
-CREATE POLICY "Usuários autenticados podem ver todas as landing pages" ON landing_pages
-  FOR SELECT USING (auth.role() = 'authenticated');
+-- Permitir que usuários vejam suas próprias landing pages
+CREATE POLICY "Usuários podem ver suas próprias landing pages" ON landing_pages
+  FOR SELECT USING (auth.uid() = user_id);
 
--- Permitir que usuários autenticados possam criar landing pages
-CREATE POLICY "Usuários autenticados podem criar landing pages" ON landing_pages
-  FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+-- Permitir que usuários criem landing pages associadas a eles
+CREATE POLICY "Usuários podem criar suas próprias landing pages" ON landing_pages
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
 
--- Permitir que usuários autenticados possam atualizar landing pages
-CREATE POLICY "Usuários autenticados podem atualizar landing pages" ON landing_pages
-  FOR UPDATE USING (auth.role() = 'authenticated');
+-- Permitir que usuários atualizem suas próprias landing pages
+CREATE POLICY "Usuários podem atualizar suas próprias landing pages" ON landing_pages
+  FOR UPDATE USING (auth.uid() = user_id);
 
--- Permitir que usuários autenticados possam deletar landing pages
-CREATE POLICY "Usuários autenticados podem deletar landing pages" ON landing_pages
-  FOR DELETE USING (auth.role() = 'authenticated');
+-- Permitir que usuários deletem suas próprias landing pages
+CREATE POLICY "Usuários podem deletar suas próprias landing pages" ON landing_pages
+  FOR DELETE USING (auth.uid() = user_id);
 
 -- Create function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
