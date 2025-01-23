@@ -24,6 +24,10 @@ INSERT INTO storage.buckets (id, name, public)
 VALUES ('landing-pages', 'landing-pages', true)
 ON CONFLICT (id) DO NOTHING;
 
+-- Remover políticas existentes
+DROP POLICY IF EXISTS "Permitir upload de imagens por usuários autenticados" ON storage.objects;
+DROP POLICY IF EXISTS "Permitir leitura pública de imagens" ON storage.objects;
+
 -- Criar política para permitir upload de imagens
 CREATE POLICY "Permitir upload de imagens por usuários autenticados"
 ON storage.objects FOR INSERT TO authenticated
