@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, use } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import Image from 'next/image'
 import toast from 'react-hot-toast'
@@ -16,11 +16,11 @@ interface FormField {
   options?: string[]
 }
 
-export default function LandingPageView({ params }: { params: Promise<{ id: string }> }) {
-  const [page, setPage] = useState<LandingPage | null>(null)
+export default function LandingPageView({ params }: { params: { id: string } }) {
+  const [landingPage, setLandingPage] = useState<LandingPage | null>(null)
   const [loading, setLoading] = useState(true)
   const [formData, setFormData] = useState<Record<string, string>>({})
-  const { id: pageId } = use(params)
+  const pageId = params.id
   const pathname = usePathname()
   const isPublicView = pathname.startsWith('/landing-pages/')
 
@@ -38,7 +38,7 @@ export default function LandingPageView({ params }: { params: Promise<{ id: stri
         .single()
 
       if (error) throw error
-      setPage(data)
+      setLandingPage(data)
 
       if (isPublicView && data.status === 'published') {
         try {
@@ -110,15 +110,15 @@ export default function LandingPageView({ params }: { params: Promise<{ id: stri
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!page || page.status !== 'published' || !isPublicView) return
+    if (!landingPage || landingPage.status !== 'published' || !isPublicView) return
 
     try {
       // Validar e formatar os dados antes de salvar
-      const validatedFormData = validateAndFormatFormData(page.form_fields, formData)
+      const validatedFormData = validateAndFormatFormData(landingPage.form_fields, formData)
 
       const { error: submissionError } = await supabase.from('leads').insert([{
-        landing_page_id: page.id,
-        form_fields: page.form_fields,
+        landing_page_id: landingPage.id,
+        form_fields: landingPage.form_fields,
         form_data: validatedFormData,
         status: 'new',
         source: 'direct', // Você pode ajustar isso baseado na origem
@@ -127,8 +127,8 @@ export default function LandingPageView({ params }: { params: Promise<{ id: stri
 
       if (submissionError) throw submissionError
 
-      const newConversions = (page.conversions || 0) + 1
-      const newConversionRate = ((newConversions / (page.visits || 1)) * 100).toFixed(2)
+      const newConversions = (landingPage.conversions || 0) + 1
+      const newConversionRate = ((newConversions / (landingPage.visits || 1)) * 100).toFixed(2)
 
       const { error: updateError } = await supabase
         .from('landing_pages')
@@ -136,15 +136,15 @@ export default function LandingPageView({ params }: { params: Promise<{ id: stri
           conversions: newConversions,
           conversion_rate: parseFloat(newConversionRate)
         })
-        .eq('id', page.id)
+        .eq('id', landingPage.id)
 
       if (updateError) throw updateError
 
       toast.success('Formulário enviado com sucesso!')
       setFormData({})
       
-      setPage({
-        ...page,
+      setLandingPage({
+        ...landingPage,
         conversions: newConversions,
         conversion_rate: parseFloat(newConversionRate)
       })
@@ -169,7 +169,7 @@ export default function LandingPageView({ params }: { params: Promise<{ id: stri
     )
   }
 
-  if (!page) {
+  if (!landingPage) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -180,7 +180,7 @@ export default function LandingPageView({ params }: { params: Promise<{ id: stri
     )
   }
 
-  if (page.status !== 'published') {
+  if (landingPage.status !== 'published') {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -194,15 +194,15 @@ export default function LandingPageView({ params }: { params: Promise<{ id: stri
   return (
     <div 
       className="min-h-screen bg-cover bg-center bg-opacity-20"
-      style={{ backgroundImage: page.background_url ? `url(${page.background_url})` : undefined }}
+      style={{ backgroundImage: landingPage.background_url ? `url(${landingPage.background_url})` : undefined }}
     >
       <div className="min-h-screen bg-white bg-opacity-90 py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col md:flex-row gap-8 items-center justify-center">
-            {page.logo_url && (
+            {landingPage.logo_url && (
               <div className="w-full md:w-1/2">
                 <Image
-                  src={page.logo_url}
+                  src={landingPage.logo_url}
                   alt="Logo"
                   width={600}
                   height={600}
@@ -215,14 +215,14 @@ export default function LandingPageView({ params }: { params: Promise<{ id: stri
             
             <div className="w-full md:w-1/2">
               <div className="bg-white rounded-lg shadow-xl p-8">
-                <h1 className="text-3xl font-bold text-center mb-4">{page.title}</h1>
-                <p className="text-gray-600 text-center mb-8">{page.description}</p>
+                <h1 className="text-3xl font-bold text-center mb-4">{landingPage.title}</h1>
+                <p className="text-gray-600 text-center mb-8">{landingPage.description}</p>
                 
-                {page.use_custom_html ? (
-                  <div dangerouslySetInnerHTML={{ __html: page.custom_html }} />
+                {landingPage.use_custom_html ? (
+                  <div dangerouslySetInnerHTML={{ __html: landingPage.custom_html }} />
                 ) : (
                   <form onSubmit={handleSubmit} className="space-y-6">
-                    {page.form_fields.map(field => (
+                    {landingPage.form_fields.map(field => (
                       <div key={field.id}>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           {field.label} {field.required && <span className="text-red-500">*</span>}
@@ -260,10 +260,10 @@ export default function LandingPageView({ params }: { params: Promise<{ id: stri
                     
                     <button
                       type="submit"
-                      style={{ backgroundColor: page.button_color }}
+                      style={{ backgroundColor: landingPage.button_color }}
                       className="w-full py-3 px-4 rounded-md text-white font-medium hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                     >
-                      {page.button_text || 'Enviar'}
+                      {landingPage.button_text || 'Enviar'}
                     </button>
                   </form>
                 )}
