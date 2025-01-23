@@ -4,9 +4,10 @@ import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
-import { PlusIcon, TrashIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, TrashIcon, EyeIcon, PhotoIcon, ClipboardDocumentListIcon, DocumentTextIcon } from '@heroicons/react/24/outline'
 import Image from 'next/image'
 import { FormField } from '@/types/landingpage'
+import { Switch } from '@/components/ui/switch'
 
 export default function NewLandingPage() {
   const router = useRouter()
@@ -24,6 +25,7 @@ export default function NewLandingPage() {
     formFields: [] as FormField[],
     buttonText: 'Enviar',
     buttonColor: '#3182ce',
+    useCustomHtml: false
   })
 
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'backgroundImage') => {
@@ -79,21 +81,59 @@ export default function NewLandingPage() {
         return
       }
 
-      const { data, error } = await supabase.from('landing_pages').insert([
-        {
-          ...formData,
-          status: 'draft',
-          user_id: user.id,
-        }
-      ]).select().single()
+      // Validar campos obrigatórios
+      if (!formData.title.trim()) {
+        throw new Error('O título é obrigatório')
+      }
+
+      // Preparar dados para inserção
+      const landingPageData = {
+        title: formData.title,
+        description: formData.description,
+        logo_url: formData.logoPreview || null,
+        background_url: formData.backgroundPreview || null,
+        form_fields: formData.formFields,
+        custom_html: formData.customHtml,
+        button_text: formData.buttonText || 'Enviar',
+        button_color: formData.buttonColor || '#3182ce',
+        use_custom_html: formData.useCustomHtml,
+        status: 'draft',
+        user_id: user.id,
+      }
+
+      // Upload logo if exists
+      if (formData.logo) {
+        const logoPath = `public/${user.id}/${Date.now()}_${formData.logo.name}`
+        const { error: logoError } = await supabase.storage
+          .from('landing-pages')
+          .upload(logoPath, formData.logo)
+        if (logoError) throw logoError
+        landingPageData.logo_url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/landing-pages/${logoPath}`
+      }
+
+      // Upload background if exists
+      if (formData.backgroundImage) {
+        const bgPath = `public/${user.id}/${Date.now()}_${formData.backgroundImage.name}`
+        const { error: bgError } = await supabase.storage
+          .from('landing-pages')
+          .upload(bgPath, formData.backgroundImage)
+        if (bgError) throw bgError
+        landingPageData.background_url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/landing-pages/${bgPath}`
+      }
+
+      const { data, error } = await supabase
+        .from('landing_pages')
+        .insert([landingPageData])
+        .select()
+        .single()
 
       if (error) throw error
 
       toast.success('Landing page criada com sucesso!')
       router.push(`/dashboard/landing-pages/${data.id}/edit`)
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error:', error)
-      toast.error('Erro ao criar landing page')
+      toast.error(error.message || 'Erro ao criar landing page')
     } finally {
       setLoading(false)
     }
@@ -176,269 +216,394 @@ export default function NewLandingPage() {
   }
 
   return (
-    <div className="p-8">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-2xl font-bold">Nova Landing Page</h1>
-        <button
-          type="button"
-          onClick={() => setPreviewMode(true)}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-        >
-          Visualizar
-        </button>
-      </div>
-      <form onSubmit={handleSubmit} className="space-y-6 max-w-3xl">
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-lg font-semibold mb-4">Informações Básicas</h2>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Título
-              </label>
-              <input
-                type="text"
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Descrição
-              </label>
-              <textarea
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                rows={4}
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Logo
-              </label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => handleImageChange(e, 'logo')}
-                className="w-full"
-              />
-              {formData.logoPreview && (
-                <div className="mt-2">
-                  <Image
-                    src={formData.logoPreview}
-                    alt="Logo preview"
-                    width={200}
-                    height={200}
-                    className="object-contain"
-                    style={{ width: 'auto', height: 'auto' }}
-                  />
-                </div>
-              )}
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Imagem de Fundo
-              </label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => handleImageChange(e, 'backgroundImage')}
-                className="w-full"
-              />
-              {formData.backgroundPreview && (
-                <div className="mt-2">
-                  <Image
-                    src={formData.backgroundPreview}
-                    alt="Background preview"
-                    width={400}
-                    height={200}
-                    className="object-cover"
-                    style={{ width: 'auto', height: 'auto' }}
-                  />
-                </div>
-              )}
-            </div>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Nova Landing Page</h1>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+              Crie uma landing page profissional para capturar leads
+            </p>
           </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-lg font-semibold mb-4">Formulário</h2>
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="useCustomHtml"
-                checked={useCustomHtml}
-                onChange={(e) => setUseCustomHtml(e.target.checked)}
-              />
-              <label htmlFor="useCustomHtml" className="text-sm font-medium text-gray-700">
-                Usar HTML personalizado
-              </label>
-            </div>
-
-            {useCustomHtml ? (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  HTML Personalizado
-                </label>
-                <textarea
-                  value={formData.customHtml}
-                  onChange={(e) => setFormData({ ...formData, customHtml: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md font-mono"
-                  rows={10}
-                  placeholder="<form>...</form>"
-                />
-              </div>
-            ) : (
-              <>
-                <div className="space-y-4">
-                  {formData.formFields.map(field => (
-                    <div key={field.id} className="bg-gray-50 p-4 rounded-lg">
-                      <div className="flex justify-between items-start mb-4">
-                        <h3 className="font-medium">Campo do Formulário</h3>
-                        <button
-                          type="button"
-                          onClick={() => removeFormField(field.id)}
-                          className="text-red-600 hover:text-red-800"
-                        >
-                          <TrashIcon className="w-5 h-5" />
-                        </button>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Tipo
-                          </label>
-                          <select
-                            value={field.type}
-                            onChange={(e) => updateFormField(field.id, { type: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                          >
-                            <option value="text">Texto</option>
-                            <option value="email">Email</option>
-                            <option value="tel">Telefone</option>
-                            <option value="number">Número</option>
-                            <option value="select">Seleção</option>
-                            <option value="textarea">Área de Texto</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Label
-                          </label>
-                          <input
-                            type="text"
-                            value={field.label}
-                            onChange={(e) => updateFormField(field.id, { label: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Placeholder
-                          </label>
-                          <input
-                            type="text"
-                            value={field.placeholder}
-                            onChange={(e) => updateFormField(field.id, { placeholder: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                          />
-                        </div>
-                        <div className="flex items-center">
-                          <input
-                            type="checkbox"
-                            id={`required-${field.id}`}
-                            checked={field.required}
-                            onChange={(e) => updateFormField(field.id, { required: e.target.checked })}
-                            className="mr-2"
-                          />
-                          <label htmlFor={`required-${field.id}`} className="text-sm font-medium text-gray-700">
-                            Obrigatório
-                          </label>
-                        </div>
-                      </div>
-                      {field.type === 'select' && (
-                        <div className="mt-4">
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Opções (uma por linha)
-                          </label>
-                          <textarea
-                            value={field.options?.join('\n')}
-                            onChange={(e) => updateFormField(field.id, { 
-                              options: e.target.value.split('\n').filter(Boolean)
-                            })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                            rows={4}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                <button
-                  type="button"
-                  onClick={addFormField}
-                  className="flex items-center gap-2 text-blue-600 hover:text-blue-800"
-                >
-                  <PlusIcon className="w-5 h-5" />
-                  Adicionar Campo
-                </button>
-                <div className="mt-4 space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Texto do Botão
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.buttonText}
-                      onChange={(e) => setFormData({ ...formData, buttonText: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Cor do Botão
-                    </label>
-                    <input
-                      type="color"
-                      value={formData.buttonColor}
-                      onChange={(e) => setFormData({ ...formData, buttonColor: e.target.value })}
-                      className="w-full"
-                    />
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-
-        <div className="flex justify-end gap-4">
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
-          >
-            Cancelar
-          </button>
           <button
             type="button"
             onClick={() => setPreviewMode(true)}
-            className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+            className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-all duration-200"
           >
+            <EyeIcon className="h-5 w-5 mr-2" />
             Visualizar
           </button>
-          <button
-            type="submit"
-            disabled={loading}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-          >
-            {loading ? 'Criando...' : 'Criar Landing Page'}
-          </button>
         </div>
-      </form>
+
+        <form onSubmit={handleSubmit} className="space-y-8">
+          {/* Seção de Informações Básicas */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div className="p-6">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6 flex items-center">
+                <DocumentTextIcon className="h-6 w-6 text-primary mr-2" />
+                Informações Básicas
+              </h2>
+              <div className="grid grid-cols-1 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Título
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.title}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                    className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-700 dark:text-white transition-colors duration-200"
+                    placeholder="Ex: Ebook Gratuito: Guia Completo de Marketing Digital"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Descrição
+                  </label>
+                  <textarea
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-700 dark:text-white transition-colors duration-200"
+                    rows={4}
+                    placeholder="Descreva o que você está oferecendo..."
+                    required
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Seção de Mídia */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div className="p-6">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6 flex items-center">
+                <PhotoIcon className="h-6 w-6 text-primary mr-2" />
+                Mídia
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Logo
+                  </label>
+                  <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 dark:border-gray-600 border-dashed rounded-lg hover:border-primary transition-colors duration-200">
+                    <div className="space-y-1 text-center">
+                      {formData.logoPreview ? (
+                        <div className="relative group">
+                          <Image
+                            src={formData.logoPreview}
+                            alt="Logo preview"
+                            width={200}
+                            height={200}
+                            className="mx-auto h-32 w-auto object-contain rounded-lg"
+                          />
+                          <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded-lg">
+                            <button
+                              type="button"
+                              onClick={() => setFormData({ ...formData, logo: null, logoPreview: '' })}
+                              className="text-white hover:text-red-500 transition-colors duration-200"
+                            >
+                              <TrashIcon className="h-6 w-6" />
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <PhotoIcon className="mx-auto h-12 w-12 text-gray-400" />
+                          <div className="flex text-sm text-gray-600 dark:text-gray-400">
+                            <label className="relative cursor-pointer rounded-md font-medium text-primary hover:text-primary/80 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-primary">
+                              <span>Upload da logo</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => handleImageChange(e, 'logo')}
+                                className="sr-only"
+                              />
+                            </label>
+                          </div>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            PNG, JPG, GIF até 10MB
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Imagem de Fundo
+                  </label>
+                  <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 dark:border-gray-600 border-dashed rounded-lg hover:border-primary transition-colors duration-200">
+                    <div className="space-y-1 text-center">
+                      {formData.backgroundPreview ? (
+                        <div className="relative group">
+                          <Image
+                            src={formData.backgroundPreview}
+                            alt="Background preview"
+                            width={400}
+                            height={200}
+                            className="mx-auto h-32 w-full object-cover rounded-lg"
+                          />
+                          <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded-lg">
+                            <button
+                              type="button"
+                              onClick={() => setFormData({ ...formData, backgroundImage: null, backgroundPreview: '' })}
+                              className="text-white hover:text-red-500 transition-colors duration-200"
+                            >
+                              <TrashIcon className="h-6 w-6" />
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <PhotoIcon className="mx-auto h-12 w-12 text-gray-400" />
+                          <div className="flex text-sm text-gray-600 dark:text-gray-400">
+                            <label className="relative cursor-pointer rounded-md font-medium text-primary hover:text-primary/80 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-primary">
+                              <span>Upload do background</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => handleImageChange(e, 'backgroundImage')}
+                                className="sr-only"
+                              />
+                            </label>
+                          </div>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            PNG, JPG, GIF até 10MB
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Seção do Formulário */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div className="p-6">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6 flex items-center">
+                <ClipboardDocumentListIcon className="h-6 w-6 text-primary mr-2" />
+                Formulário
+              </h2>
+
+              <div className="space-y-6">
+                <div className="flex items-center space-x-3">
+                  <Switch
+                    checked={useCustomHtml}
+                    onChange={setUseCustomHtml}
+                    className={`${
+                      useCustomHtml ? 'bg-primary' : 'bg-gray-200 dark:bg-gray-700'
+                    } relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200`}
+                  >
+                    <span className="sr-only">Usar HTML personalizado</span>
+                    <span
+                      className={`${
+                        useCustomHtml ? 'translate-x-6' : 'translate-x-1'
+                      } inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200`}
+                    />
+                  </Switch>
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Usar HTML personalizado
+                  </span>
+                </div>
+
+                {useCustomHtml ? (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      HTML Personalizado
+                    </label>
+                    <textarea
+                      value={formData.customHtml}
+                      onChange={(e) => setFormData({ ...formData, customHtml: e.target.value })}
+                      className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-700 dark:text-white font-mono text-sm transition-colors duration-200"
+                      rows={8}
+                      placeholder="<form>...</form>"
+                    />
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-4">
+                      {formData.formFields.map((field, index) => (
+                        <div
+                          key={field.id}
+                          className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg border border-gray-200 dark:border-gray-600"
+                        >
+                          <div className="flex justify-between items-start mb-4">
+                            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                              Campo {index + 1}
+                            </h3>
+                            <button
+                              type="button"
+                              onClick={() => removeFormField(field.id)}
+                              className="text-gray-400 hover:text-red-500 transition-colors duration-200"
+                            >
+                              <TrashIcon className="h-5 w-5" />
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Tipo
+                              </label>
+                              <select
+                                value={field.type}
+                                onChange={(e) => updateFormField(field.id, { type: e.target.value })}
+                                className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-700 dark:text-white transition-colors duration-200"
+                              >
+                                <option value="text">Texto</option>
+                                <option value="email">Email</option>
+                                <option value="tel">Telefone</option>
+                                <option value="number">Número</option>
+                                <option value="select">Seleção</option>
+                                <option value="textarea">Área de Texto</option>
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Label
+                              </label>
+                              <input
+                                type="text"
+                                value={field.label}
+                                onChange={(e) => updateFormField(field.id, { label: e.target.value })}
+                                className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-700 dark:text-white transition-colors duration-200"
+                                placeholder="Ex: Nome completo"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Placeholder
+                              </label>
+                              <input
+                                type="text"
+                                value={field.placeholder}
+                                onChange={(e) => updateFormField(field.id, { placeholder: e.target.value })}
+                                className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-700 dark:text-white transition-colors duration-200"
+                                placeholder="Ex: Digite seu nome completo"
+                              />
+                            </div>
+
+                            <div className="flex items-center space-x-3">
+                              <Switch
+                                checked={field.required}
+                                onChange={(checked: boolean) => updateFormField(field.id, { required: checked })}
+                                className={`${
+                                  field.required ? 'bg-primary' : 'bg-gray-200 dark:bg-gray-700'
+                                } relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200`}
+                              >
+                                <span className="sr-only">Campo obrigatório</span>
+                                <span
+                                  className={`${
+                                    field.required ? 'translate-x-6' : 'translate-x-1'
+                                  } inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200`}
+                                />
+                              </Switch>
+                              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Campo obrigatório
+                              </span>
+                            </div>
+                          </div>
+
+                          {field.type === 'select' && (
+                            <div className="mt-4">
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Opções (uma por linha)
+                              </label>
+                              <textarea
+                                value={field.options?.join('\n')}
+                                onChange={(e) => updateFormField(field.id, { 
+                                  options: e.target.value.split('\n').filter(Boolean)
+                                })}
+                                className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-700 dark:text-white transition-colors duration-200"
+                                rows={4}
+                                placeholder="Opção 1&#10;Opção 2&#10;Opção 3"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={addFormField}
+                      className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-all duration-200"
+                    >
+                      <PlusIcon className="h-5 w-5 mr-2 text-gray-400" />
+                      Adicionar Campo
+                    </button>
+
+                    <div className="mt-6 space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Texto do Botão
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.buttonText}
+                          onChange={(e) => setFormData({ ...formData, buttonText: e.target.value })}
+                          className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-700 dark:text-white transition-colors duration-200"
+                          placeholder="Ex: Enviar"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Cor do Botão
+                        </label>
+                        <div className="flex items-center space-x-4">
+                          <input
+                            type="color"
+                            value={formData.buttonColor}
+                            onChange={(e) => setFormData({ ...formData, buttonColor: e.target.value })}
+                            className="h-10 w-20 rounded cursor-pointer"
+                          />
+                          <span className="text-sm text-gray-500 dark:text-gray-400">
+                            {formData.buttonColor.toUpperCase()}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end space-x-4">
+            <button
+              type="button"
+              onClick={() => router.back()}
+              className="px-6 py-3 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-200"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-6 py-3 bg-primary border border-transparent rounded-lg shadow-sm text-sm font-medium text-white hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+            >
+              {loading ? (
+                <div className="flex items-center">
+                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Criando...
+                </div>
+              ) : (
+                'Criar Landing Page'
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   )
 } 
