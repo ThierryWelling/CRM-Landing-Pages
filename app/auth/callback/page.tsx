@@ -20,6 +20,23 @@ export default function AuthCallback() {
       }
 
       if (user) {
+        // Salvar informações da conta no localStorage
+        const savedAccounts = JSON.parse(localStorage.getItem('availableAccounts') || '[]')
+        const accountExists = savedAccounts.some((acc: any) => acc.email === user.email)
+
+        if (!accountExists) {
+          savedAccounts.push({
+            email: user.email,
+            avatar_url: user.user_metadata?.avatar_url,
+            name: user.user_metadata?.full_name || user.email
+          })
+          localStorage.setItem('availableAccounts', JSON.stringify(savedAccounts))
+        }
+
+        // Salvar email para auto login
+        localStorage.setItem('lastUsedEmail', user.email || '')
+        localStorage.setItem('autoLoginEnabled', 'true')
+
         // Verificar se o usuário já tem um perfil
         const { data: profile } = await supabase
           .from('user_profiles')

@@ -48,6 +48,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   const handleSignOut = async () => {
+    // Desativar login automático
+    localStorage.setItem('autoLoginEnabled', 'false')
+    
     await supabase.auth.signOut()
     router.push('/login')
   }
