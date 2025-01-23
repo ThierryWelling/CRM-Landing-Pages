@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, use } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import Image from 'next/image'
 import toast from 'react-hot-toast'
@@ -16,28 +16,35 @@ interface FormField {
   options?: string[]
 }
 
-export default function LandingPageView({ params }: { params: Promise<{ id: string }> }) {
+export default function LandingPageView({ params }: { params: { id: string } }) {
   const [page, setPage] = useState<LandingPage | null>(null)
   const [loading, setLoading] = useState(true)
   const [formData, setFormData] = useState<Record<string, string>>({})
-  const { id: pageId } = use(params)
   const pathname = usePathname()
   const isPublicView = pathname.startsWith('/landing-pages/')
 
   useEffect(() => {
-    if (!pageId) return
+    if (!params.id) return
     fetchLandingPage()
-  }, [pageId])
+  }, [params.id])
 
   const fetchLandingPage = async () => {
     try {
       const { data, error } = await supabase
         .from('landing_pages')
         .select('*')
-        .eq('id', pageId)
+        .eq('id', params.id)
         .single()
 
-      if (error) throw error
+      if (error) {
+        console.error('Erro ao buscar landing page:', error)
+        throw error
+      }
+
+      if (!data) {
+        throw new Error('Landing page não encontrada')
+      }
+
       setPage(data)
 
       if (isPublicView && data.status === 'published') {
@@ -45,7 +52,7 @@ export default function LandingPageView({ params }: { params: Promise<{ id: stri
           const { error: updateError } = await supabase
             .from('landing_pages')
             .update({ visits: (data.visits || 0) + 1 })
-            .eq('id', pageId)
+            .eq('id', params.id)
 
           if (updateError) {
             console.error('Erro ao incrementar visitas:', updateError)
@@ -54,15 +61,15 @@ export default function LandingPageView({ params }: { params: Promise<{ id: stri
           console.error('Erro ao incrementar visitas:', updateError)
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error:', error)
-      toast.error('Erro ao carregar a página')
+      toast.error(error.message || 'Erro ao carregar a página')
     } finally {
       setLoading(false)
     }
   }
 
-  const validateAndFormatFormData = (formFields: any[], formData: any) => {
+  const validateAndFormatFormData = (formFields: FormField[], formData: Record<string, string>) => {
     const validatedData: Record<string, any> = {}
     
     formFields.forEach(field => {
@@ -80,7 +87,6 @@ export default function LandingPageView({ params }: { params: Promise<{ id: stri
           validatedData[field.label] = String(value || '')
           break
         case 'tel':
-          // Remove caracteres não numéricos
           const phone = String(value || '').replace(/\D/g, '')
           if (phone && phone.length < 10) {
             throw new Error(`O campo ${field.label} deve ser um telefone válido`)
@@ -113,7 +119,6 @@ export default function LandingPageView({ params }: { params: Promise<{ id: stri
     if (!page || page.status !== 'published' || !isPublicView) return
 
     try {
-      // Validar e formatar os dados antes de salvar
       const validatedFormData = validateAndFormatFormData(page.form_fields, formData)
 
       const { error: submissionError } = await supabase.from('leads').insert([{
@@ -121,7 +126,7 @@ export default function LandingPageView({ params }: { params: Promise<{ id: stri
         form_fields: page.form_fields,
         form_data: validatedFormData,
         status: 'new',
-        source: 'direct', // Você pode ajustar isso baseado na origem
+        source: 'direct',
         created_at: new Date().toISOString()
       }])
 

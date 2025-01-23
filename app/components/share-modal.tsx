@@ -13,11 +13,13 @@ export default function ShareModal({ isOpen, onClose, url }: ShareModalProps) {
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
+    if (!isOpen) return
+    
     if (copied) {
       const timer = setTimeout(() => setCopied(false), 2000)
       return () => clearTimeout(timer)
     }
-  }, [copied])
+  }, [copied, isOpen])
 
   const handleCopy = async () => {
     try {
